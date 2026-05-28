@@ -1,5 +1,5 @@
-# Menggunakan image PHP 8.2 dengan Apache
-FROM php:8.2-apache
+# Ubah versi ini menjadi 8.4
+FROM php:8.4-apache
 
 # Install ekstensi sistem yang dibutuhkan
 RUN apt-get update && apt-get install -y \
