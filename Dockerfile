@@ -29,3 +29,10 @@ RUN composer install --no-dev --optimize-autoloader
 
 # Beri izin akses folder storage agar Laravel tidak error permission
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+
+# Gunakan script entrypoint untuk memindahkan env ke file .env saat startup
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["apache2-foreground"]
