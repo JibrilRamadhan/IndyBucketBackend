@@ -13,6 +13,7 @@ class Product extends Model
         'price',
         'stock_status',
         'label',
+        'home_section',
     ];
 
     protected $casts = [

@@ -11,32 +11,21 @@ class ProductController extends Controller
 {
     /**
      * Daftar semua produk beserta gambarnya (Publik).
+     * Query param: ?section=discover|fresh|bestseller
      */
-    public function index()
+    public function index(Request $request)
     {
-        $products = Product::with('images')->orderBy('created_at', 'desc')->get();
+        $query = Product::with('images')->orderBy('created_at', 'desc');
+
+        // Filter berdasarkan home_section jika ada query param
+        if ($request->has('section') && in_array($request->section, ['discover', 'fresh', 'bestseller'])) {
+            $query->where('home_section', $request->section);
+        }
+
+        $products = $query->get();
 
         return response()->json([
-            'products' => $products->map(function ($product) {
-                return [
-                    'id' => $product->id,
-                    'name' => $product->name,
-                    'description' => $product->description,
-                    'price' => $product->price,
-                    'stock_status' => $product->stock_status,
-                    'label' => $product->label,
-                    'images' => $product->images->map(function ($image) {
-                        return [
-                            'id' => $image->id,
-                            'url' => $image->image_path, // Sekarang langsung berupa URL dari Supabase
-                            'is_primary' => $image->is_primary,
-                            'sort_order' => $image->sort_order,
-                        ];
-                    }),
-                    'created_at' => $product->created_at,
-                    'updated_at' => $product->updated_at,
-                ];
-            }),
+            'products' => $products->map(fn($p) => $this->formatProduct($p)),
         ]);
     }
 
@@ -46,27 +35,7 @@ class ProductController extends Controller
     public function show(Product $product)
     {
         $product->load('images');
-
-        return response()->json([
-            'product' => [
-                'id' => $product->id,
-                'name' => $product->name,
-                'description' => $product->description,
-                'price' => $product->price,
-                'stock_status' => $product->stock_status,
-                'label' => $product->label,
-                'images' => $product->images->map(function ($image) {
-                    return [
-                        'id' => $image->id,
-                        'url' => $image->image_path,
-                        'is_primary' => $image->is_primary,
-                        'sort_order' => $image->sort_order,
-                    ];
-                }),
-                'created_at' => $product->created_at,
-                'updated_at' => $product->updated_at,
-            ],
-        ]);
+        return response()->json(['product' => $this->formatProduct($product)]);
     }
 
     /**
@@ -75,12 +44,13 @@ class ProductController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'price' => 'required|numeric|min:0',
+            'name'         => 'required|string|max:255',
+            'description'  => 'nullable|string',
+            'price'        => 'required|numeric|min:0',
             'stock_status' => 'required|in:available,out_of_stock',
-            'label' => 'required|in:none,best_seller,new',
-            'image_urls' => 'nullable|array|max:10',
+            'label'        => 'required|in:none,best_seller,new',
+            'home_section' => 'nullable|in:discover,fresh,bestseller',
+            'image_urls'   => 'nullable|array|max:10',
             'image_urls.*' => 'url',
         ]);
 
@@ -89,20 +59,20 @@ class ProductController extends Controller
         }
 
         $product = Product::create([
-            'name' => $request->name,
-            'description' => $request->description,
-            'price' => $request->price,
+            'name'         => $request->name,
+            'description'  => $request->description,
+            'price'        => $request->price,
             'stock_status' => $request->stock_status,
-            'label' => $request->label,
+            'label'        => $request->label,
+            'home_section' => $request->home_section ?: null,
         ]);
 
-        // Simpan URL gambar jika ada
         if ($request->has('image_urls')) {
             foreach ($request->input('image_urls') as $index => $url) {
                 ProductImage::create([
                     'product_id' => $product->id,
                     'image_path' => $url,
-                    'is_primary' => $index === 0, // Gambar pertama jadi primary
+                    'is_primary' => $index === 0,
                     'sort_order' => $index,
                 ]);
             }
@@ -112,7 +82,7 @@ class ProductController extends Controller
 
         return response()->json([
             'message' => 'Produk berhasil ditambahkan!',
-            'product' => $product,
+            'product' => $this->formatProduct($product),
         ], 201);
     }
 
@@ -122,11 +92,12 @@ class ProductController extends Controller
     public function update(Request $request, Product $product)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'price' => 'required|numeric|min:0',
+            'name'         => 'required|string|max:255',
+            'description'  => 'nullable|string',
+            'price'        => 'required|numeric|min:0',
             'stock_status' => 'required|in:available,out_of_stock',
-            'label' => 'required|in:none,best_seller,new',
+            'label'        => 'required|in:none,best_seller,new',
+            'home_section' => 'nullable|in:discover,fresh,bestseller',
         ]);
 
         if ($validator->fails()) {
@@ -134,18 +105,19 @@ class ProductController extends Controller
         }
 
         $product->update([
-            'name' => $request->name,
-            'description' => $request->description,
-            'price' => $request->price,
+            'name'         => $request->name,
+            'description'  => $request->description,
+            'price'        => $request->price,
             'stock_status' => $request->stock_status,
-            'label' => $request->label,
+            'label'        => $request->label,
+            'home_section' => $request->home_section ?: null,
         ]);
 
         $product->load('images');
 
         return response()->json([
             'message' => 'Produk berhasil diperbarui!',
-            'product' => $product,
+            'product' => $this->formatProduct($product),
         ]);
     }
 
@@ -154,15 +126,8 @@ class ProductController extends Controller
      */
     public function destroy(Product $product)
     {
-        // Catatan: Penghapusan file fisik dari Supabase Storage 
-        // akan diurus oleh frontend sebelum memanggil endpoint ini
-        // Backend hanya menghapus record dari database.
-
-        $product->delete(); // Cascade akan menghapus record product_images juga
-
-        return response()->json([
-            'message' => 'Produk berhasil dihapus!',
-        ]);
+        $product->delete();
+        return response()->json(['message' => 'Produk berhasil dihapus!']);
     }
 
     /**
@@ -171,7 +136,7 @@ class ProductController extends Controller
     public function storeImage(Request $request, Product $product)
     {
         $validator = Validator::make($request->all(), [
-            'image_urls' => 'required|array|max:10',
+            'image_urls'   => 'required|array|max:10',
             'image_urls.*' => 'url',
         ]);
 
@@ -192,8 +157,8 @@ class ProductController extends Controller
             ]);
 
             $savedImages[] = [
-                'id' => $productImage->id,
-                'url' => $productImage->image_path,
+                'id'         => $productImage->id,
+                'url'        => $productImage->image_path,
                 'is_primary' => $productImage->is_primary,
                 'sort_order' => $productImage->sort_order,
             ];
@@ -201,7 +166,7 @@ class ProductController extends Controller
 
         return response()->json([
             'message' => 'Gambar berhasil ditambahkan!',
-            'images' => $savedImages,
+            'images'  => $savedImages,
         ], 201);
     }
 
@@ -211,24 +176,20 @@ class ProductController extends Controller
     public function destroyImage(ProductImage $productImage)
     {
         $wasPrimary = $productImage->is_primary;
-        $productId = $productImage->product_id;
+        $productId  = $productImage->product_id;
 
         $productImage->delete();
 
-        // Jika gambar yang dihapus adalah primary, jadikan gambar pertama sbg primary baru
         if ($wasPrimary) {
             $nextImage = ProductImage::where('product_id', $productId)
                 ->orderBy('sort_order')
                 ->first();
-
             if ($nextImage) {
                 $nextImage->update(['is_primary' => true]);
             }
         }
 
-        return response()->json([
-            'message' => 'Gambar berhasil dihapus!',
-        ]);
+        return response()->json(['message' => 'Gambar berhasil dihapus!']);
     }
 
     /**
@@ -243,8 +204,29 @@ class ProductController extends Controller
         $product->images()->update(['is_primary' => false]);
         $productImage->update(['is_primary' => true]);
 
-        return response()->json([
-            'message' => 'Gambar utama berhasil diubah!',
-        ]);
+        return response()->json(['message' => 'Gambar utama berhasil diubah!']);
+    }
+
+    // ─── Helper ────────────────────────────────────────────────────────────────
+
+    private function formatProduct(Product $product): array
+    {
+        return [
+            'id'           => $product->id,
+            'name'         => $product->name,
+            'description'  => $product->description,
+            'price'        => $product->price,
+            'stock_status' => $product->stock_status,
+            'label'        => $product->label,
+            'home_section' => $product->home_section,
+            'images'       => $product->images->map(fn($img) => [
+                'id'         => $img->id,
+                'url'        => $img->image_path,
+                'is_primary' => $img->is_primary,
+                'sort_order' => $img->sort_order,
+            ]),
+            'created_at'   => $product->created_at,
+            'updated_at'   => $product->updated_at,
+        ];
     }
 }
