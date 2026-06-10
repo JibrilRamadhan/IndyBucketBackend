@@ -46,6 +46,8 @@ class ProductController extends Controller
         $validator = Validator::make($request->all(), [
             'name'         => 'required|string|max:255',
             'description'  => 'nullable|string',
+            'features'     => 'nullable|array',
+            'features.*'   => 'string|max:255',
             'price'        => 'required|numeric|min:0',
             'stock_status' => 'required|in:available,out_of_stock',
             'label'        => 'required|in:none,best_seller,new',
@@ -61,6 +63,7 @@ class ProductController extends Controller
         $product = Product::create([
             'name'         => $request->name,
             'description'  => $request->description,
+            'features'     => $request->features ?? [],
             'price'        => $request->price,
             'stock_status' => $request->stock_status,
             'label'        => $request->label,
@@ -94,6 +97,8 @@ class ProductController extends Controller
         $validator = Validator::make($request->all(), [
             'name'         => 'required|string|max:255',
             'description'  => 'nullable|string',
+            'features'     => 'nullable|array',
+            'features.*'   => 'string|max:255',
             'price'        => 'required|numeric|min:0',
             'stock_status' => 'required|in:available,out_of_stock',
             'label'        => 'required|in:none,best_seller,new',
@@ -107,6 +112,7 @@ class ProductController extends Controller
         $product->update([
             'name'         => $request->name,
             'description'  => $request->description,
+            'features'     => $request->features ?? [],
             'price'        => $request->price,
             'stock_status' => $request->stock_status,
             'label'        => $request->label,
@@ -215,6 +221,7 @@ class ProductController extends Controller
             'id'           => $product->id,
             'name'         => $product->name,
             'description'  => $product->description,
+            'features'     => $product->features ?? [],
             'price'        => $product->price,
             'stock_status' => $product->stock_status,
             'label'        => $product->label,

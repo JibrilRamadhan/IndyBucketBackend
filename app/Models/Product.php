@@ -10,6 +10,7 @@ class Product extends Model
     protected $fillable = [
         'name',
         'description',
+        'features',
         'price',
         'stock_status',
         'label',
@@ -17,7 +18,8 @@ class Product extends Model
     ];
 
     protected $casts = [
-        'price' => 'decimal:2',
+        'price'    => 'decimal:2',
+        'features' => 'array',
     ];
 
     /**
